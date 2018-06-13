@@ -1,16 +1,81 @@
 package com.example.android.miwok;
 
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.ContentResolver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.IntentSender;
+import android.content.ServiceConnection;
+import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.res.AssetManager;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.database.DatabaseErrorHandler;
+import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.UserHandle;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.view.Display;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
+import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 
 public class ColorsActivity extends AppCompatActivity {
+
+    private Context mContext;
+
     private MediaPlayer mMediaPlayer;
+    private MediaPlayer.OnCompletionListener mCompletionListener = new MediaPlayer.OnCompletionListener() {
+        @Override
+        public void onCompletion(MediaPlayer mp) {
+            releaseMediaPlayer();
+        }
+    };
+
+    /**
+     * Clean up the media player by releasing its resources.
+     */
+    private void releaseMediaPlayer() {
+        // If the media player is not null, then it may be currently playing a sound.
+        if (mMediaPlayer != null) {
+            // Regardless of the current state of the media player, release its resources
+            // because we no longer need it.
+            mMediaPlayer.release();
+
+            // Set the media player back to null. For our code, we've decided that
+            // setting the media player to null is an easy way to tell that the media player
+            // is not configured to play an audio file at the moment.
+            mMediaPlayer = null;
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        releaseMediaPlayer();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,12 +113,43 @@ public class ColorsActivity extends AppCompatActivity {
 
         listView.setAdapter(adapter);
 
+
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+            public void onItemClick(AdapterView<?> parent, View view, final int position, long id) {
+                final AudioManager am = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+
+                releaseMediaPlayer();
+// Request audio focus for playback
+
+                final AudioManager.OnAudioFocusChangeListener afChangeListener = new AudioManager.OnAudioFocusChangeListener() {
+                    @Override
+                    public void onAudioFocusChange(int focusChange) {
+                        if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
+                            mMediaPlayer.start();
+                        } else if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
+                            mMediaPlayer.stop();
+                            releaseMediaPlayer();
+                        } else if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+                            mMediaPlayer.pause();
+                        } else if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+                            mMediaPlayer.pause();
+                        }
+                    }
+                };
+                int result = am.requestAudioFocus(afChangeListener,
+                        // Use the music stream.
+                        AudioManager.STREAM_MUSIC,
+                        // Request permanent focus.
+                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+
+                // Start playback.
                 Word word = words.get(position);
                 mMediaPlayer = MediaPlayer.create(ColorsActivity.this, word.getSoundResourceId());
                 mMediaPlayer.start();
+                mMediaPlayer.setOnCompletionListener(mCompletionListener);
+
+
             }
         });
     }
