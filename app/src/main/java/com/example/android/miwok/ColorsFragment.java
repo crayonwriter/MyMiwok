@@ -182,4 +182,3 @@ public class ColorsFragment extends Fragment {
     }
 }
 
-
